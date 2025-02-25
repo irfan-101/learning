@@ -1,0 +1,42 @@
+---
+- hosts: all
+  become: true
+
+  vars:
+    source_key_path: "/root/.ssh/id_rsa.pub"  # Path to your *public* key on the control node
+    dest_authorized_keys_path: "/root/.ssh/authorized_keys" # Path on target hosts (root's authorized_keys)
+
+  tasks:
+    - name: Check if the source key exists
+      stat:
+        path: "{{ source_key_path }}"
+      register: source_key_stat
+
+    - name: Fail if the source key doesn't exist
+      fail_when: source_key_stat.stat.exists == false
+      msg: "Source key does not exist at {{ source_key_path }}"
+
+    - name: Ensure /root/.ssh directory exists on target hosts
+      file:
+        path: "/root/.ssh"
+        state: directory
+        mode: 0700  # Strict permissions for root's .ssh
+        owner: root
+        group: root
+
+    - name: Copy public key to /root/.ssh/authorized_keys on target hosts
+      blockinfile:
+        path: "{{ dest_authorized_keys_path }}"
+        create: yes
+        block: "{{ lookup('file', source_key_path) }}"
+        marker: "# {mark} root_key" # Clear marker
+        owner: root
+        group: root
+
+    - name: Set correct permissions on /root/.ssh/authorized_keys
+      file:
+        path: "{{ dest_authorized_keys_path }}"
+        mode: 0600  # Strict permissions
+        owner: root
+        group: root
+
